@@ -1,0 +1,21 @@
+
+1) I forked the repository from the Geospark.
+
+2) Implemented the below 8 functions from team 7
+
+
+	ST_Dimension - returns 0, 1 or 2 if its a point, line or a polygon. 
+		ST_GeometryType - returns the type of geometry with an "ST_" appended to it. 
+		ST_AsText - Converts the given geometry to text and returns.
+
+	ST_X - returns the x - coordinate of the geometry
+
+	ST_Y - returns the y - coordinate of the geometry
+
+	ST_IsSimple - returns boolean if any geometry points intersect with one another
+		ST_IsEmpty - returns boolean if all the points of the polygon are empty
+		ST_IsClosed - if the figure is closed by itself.
+
+
+
+I have added test cases for all these functions covering all the corner cases.
