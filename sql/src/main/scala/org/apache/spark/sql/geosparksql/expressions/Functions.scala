@@ -33,13 +33,15 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.catalyst.util.{ArrayData, GenericArrayData}
 import org.apache.spark.sql.geosparksql.UDT.GeometryUDT
-import org.apache.spark.sql.types.{BooleanType, DataType, DoubleType}
+import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import org.datasyslab.geosparksql.utils.GeometrySerializer
 import org.geotools.geometry.jts.JTS
 import org.geotools.referencing.CRS
 import org.opengis.referencing.operation.MathTransform
 import com.vividsolutions.jts.geom._
+import org.datasyslab.geospark.enums.FileDataSplitter
+import org.datasyslab.geospark.formatMapper.FormatMapper
 
 /**
   * Return the distance between two geometries.
@@ -289,6 +291,143 @@ case class ST_PrecisionReduce(inputExpressions: Seq[Expression])
   }
 
   override def dataType: DataType = new GeometryUDT()
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_Dimension(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    val expression = inputExpressions(0).eval(input).asInstanceOf[UTF8String].toString;
+    if(expression.contains("POLYGON"))
+      return 2;
+    else if(expression.contains("LINESTRING"))
+      return 1;
+    return 0;
+  }
+
+  override def dataType: DataType = IntegerType
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_GeometryType(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    val geometry = GeometrySerializer.deserialize(inputExpressions(0).eval(input).asInstanceOf[ArrayData])
+    "ST_"+geometry.getGeometryType
+  }
+
+  override def dataType: DataType = StringType
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_AsText(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    val geometry = GeometrySerializer.deserialize(inputExpressions(0).eval(input).asInstanceOf[ArrayData])
+    geometry.toText
+  }
+
+  override def dataType: DataType = StringType
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_X(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    val geometry = GeometrySerializer.deserialize(inputExpressions(0).eval(input).asInstanceOf[ArrayData])
+    geometry.getCoordinate.x
+  }
+
+  override def dataType: DataType = DoubleType
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_Y(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    val geometry = GeometrySerializer.deserialize(inputExpressions(0).eval(input).asInstanceOf[ArrayData])
+    geometry.getCoordinate.y
+  }
+
+  override def dataType: DataType = DoubleType
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_IsSimple(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    val geometry = GeometrySerializer.deserialize(inputExpressions(0).eval(input).asInstanceOf[ArrayData])
+    geometry.isSimple
+  }
+
+  override def dataType: DataType = BooleanType
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_IsEmpty(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    val geometry = GeometrySerializer.deserialize(inputExpressions(0).eval(input).asInstanceOf[ArrayData])
+    geometry.isEmpty
+  }
+
+  override def dataType: DataType = BooleanType
+
+  override def children: Seq[Expression] = inputExpressions
+}
+
+case class ST_IsClosed(inputExpressions: Seq[Expression])
+  extends Expression with CodegenFallback {
+  override def nullable: Boolean = false
+
+  override def eval(input: InternalRow): Any = {
+    var res = false
+    val geometry = GeometrySerializer.deserialize(inputExpressions(0).eval(input).asInstanceOf[ArrayData])
+    var x = geometry.getNumGeometries
+    if(x > 1){
+      x -= 1
+      for(i <- 0 to x)
+        if(geometry.getGeometryN(i).getNumPoints == 1) return true
+
+      for (i <- 0 to x)
+        for (j <- 0 to x)
+          if(i != j && geometry.getGeometryN(i).compareTo(geometry.getGeometryN(j)) == 0)
+            res = true
+      res
+    }
+    else{
+      if(geometry.getNumPoints == 1) return true
+      val n = geometry.getNumPoints-1
+      for (i <- 0 to n)
+        for (j <- 0 to n)
+          if(i != j && geometry.getCoordinates()(i).compareTo(geometry.getCoordinates()(j)) == 0)
+            res = true
+      res
+    }
+  }
+
+  override def dataType: DataType = BooleanType
 
   override def children: Seq[Expression] = inputExpressions
 }

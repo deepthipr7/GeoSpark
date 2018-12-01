@@ -27,6 +27,8 @@
 package org.datasyslab.geosparksql
 
 import com.vividsolutions.jts.geom.Geometry
+import org.apache.spark.sql.catalyst.util.ArrayData
+import org.apache.spark.sql.types.{IntegerType, StringType}
 
 class functionTestScala extends TestBaseScala {
 
@@ -173,6 +175,116 @@ class functionTestScala extends TestBaseScala {
         """.stripMargin)
       testtable.show(false)
       assert(testtable.take(1)(0).get(0).asInstanceOf[Geometry].getCoordinates()(0).x == 0.12345678901)
+
+    }
+
+    it("Passed ST_Dimension LineString") {
+
+      val testtable=sparkSession.sql("select ST_Dimension('GEOMETRYCOLLECTION(LINESTRING(1 1,0 0),POINT(0 0))')")
+      testtable.createOrReplaceTempView("testtable")
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Integer] == 1)
+    }
+
+    it("Passed ST_Dimension Point") {
+
+      val testtable=sparkSession.sql("select ST_Dimension('GEOMETRYCOLLECTION(POINT(0 0))')")
+      testtable.createOrReplaceTempView("testtable")
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Integer] == 0)
+    }
+
+    it("Passed ST_Dimension Polygon") {
+
+      val testtable=sparkSession.sql("select ST_Dimension('GEOMETRYCOLLECTION(POLYGON(0 0, 0 1, 1 0, 1 1), ,POINT(0 0))')")
+      testtable.createOrReplaceTempView("testtable")
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Integer] == 2)
+    }
+
+
+    it("Passed ST_GeometryType") {
+
+      val testtable=sparkSession.sql("select ST_GeometryType(ST_GeomFromText('LINESTRING(77.29 29.07,77.42 29.26,77.27 29.31,77.29 29.07)'))")
+      testtable.createOrReplaceTempView("testtable")
+    }
+
+    it("Passed ST_AsText") {
+      val testtable=sparkSession.sql("SELECT ST_AsText(ST_GeomFromWKT('POINT(111.1111111 1.1111111)'))")
+      testtable.createOrReplaceTempView("testtable")
+    }
+
+    it("Passed ST_X") {
+      var testtable=sparkSession.sql(
+        "SELECT ST_X(ST_GeomFromWKT('POINT(1  2)'))"
+      )
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Double] == 1.0)
+    }
+
+    it("Passed ST_Y") {
+      var testtable=sparkSession.sql(
+        "SELECT ST_Y(ST_GeomFromWKT('POINT(1  2)'))"
+      )
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Double] == 2.0)
+    }
+
+    it("Passed Centroid ST_Y") {
+      var polygonWktDf = sparkSession.read.format("csv").option("delimiter", "\t").option("header", "false").load(mixedWktGeometryInputLocation)
+      polygonWktDf.createOrReplaceTempView("polygontable")
+      polygonWktDf.show()
+      var polygonDf = sparkSession.sql("select ST_GeomFromWKT(polygontable._c0) as countyshape from polygontable")
+      polygonDf.createOrReplaceTempView("polygondf")
+      polygonDf.show()
+      var functionDf = sparkSession.sql("select ST_Y(ST_Centroid(polygondf.countyshape)) from polygondf")
+      assert(functionDf.take(1)(0).get(0).asInstanceOf[Double] == 41.916402825970664)
+    }
+
+    it("Passed ST_IsSimple") {
+      var testtable=sparkSession.sql(
+        "SELECT ST_IsSimple(ST_GeomFromText('LINESTRING(1 1,2 2,2 3.5,1 3,1 2,2 1)'))"
+      )
+      assert(!testtable.take(1)(0).get(0).asInstanceOf[Boolean])
+    }
+
+    it("Passed ST_IsEmpty") {
+      var testDF = sparkSession.sql("select ST_IsEmpty(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY'))")
+      assert(testDF.take(1)(0).get(0).asInstanceOf[Boolean])
+
+      var polygonWktDf = sparkSession.read.format("csv").option("delimiter", "\t").option("header", "false").load(mixedWktGeometryInputLocation)
+      polygonWktDf.createOrReplaceTempView("polygontable")
+      polygonWktDf.show()
+      var polygonDf = sparkSession.sql("select ST_IsEmpty(ST_GeomFromText(polygontable._c0)) as status from polygontable")
+      polygonDf.show(10)
+      assert(polygonDf.count() == 100)
+      polygonDf.createOrReplaceTempView("polygontable")
+      var sampletestDf = sparkSession.sql("select count(polygontable.status) from polygontable where polygontable.status = 'true'")
+      assert(sampletestDf.take(1)(0).get(0).asInstanceOf[Long] == 0)
+    }
+
+    it("Passed ST_IsClosed") {
+
+      var testtable=sparkSession.sql(
+        "SELECT ST_IsClosed(ST_GeomFromWKT('LINESTRING(0 0, 1 1))'))"
+      )
+      assert(!testtable.take(1)(0).get(0).asInstanceOf[Boolean])
+
+
+      testtable=sparkSession.sql(
+        "SELECT ST_IsClosed(ST_GeomFromWKT('LINESTRING(0 0, 0 1, 1 1, 0 0)'))"
+      )
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Boolean])
+
+      testtable=sparkSession.sql(
+        "SELECT ST_IsClosed(ST_GeomFromWKT('MULTILINESTRING((0 0, 0 1, 1 1, 0 0),(0 0, 1 1))'))"
+      )
+      assert(!testtable.take(1)(0).get(0).asInstanceOf[Boolean])
+
+      testtable=sparkSession.sql(
+        "SELECT ST_IsClosed(ST_GeomFromWKT('POINT(0 0)'))"
+      )
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Boolean])
+
+      testtable=sparkSession.sql(
+        "SELECT ST_IsClosed(ST_GeomFromWKT('MULTIPOINT((0 0), (1 1))'))"
+      )
+      assert(testtable.take(1)(0).get(0).asInstanceOf[Boolean])
 
     }
   }
